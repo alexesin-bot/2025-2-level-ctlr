@@ -13,7 +13,6 @@ from bs4 import BeautifulSoup, Tag
 
 from core_utils.article.article import Article
 from core_utils.config_dto import ConfigDTO
-
 from core_utils.constants import CRAWLER_CONFIG_PATH, ASSETS_PATH
 
 class IncorrectSeedURLError(Exception):
