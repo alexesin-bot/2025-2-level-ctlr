@@ -67,7 +67,7 @@ class Config:
 
         with open(self._path_to_config, encoding="utf-8") as config_file:
             config_data = json.load(config_file)
-            return ConfigDTO(config_data["seed_urls"], config_data["total_articles_to_find_and_parse"], config_data["headers"], config_data["encoding"], config_data["timeout"], config_data["should_verify_certificate"], config_data["headless_mode"])
+            return ConfigDTO(**config_data)
 
 
     def _validate_config_content(self) -> None:
@@ -92,8 +92,11 @@ class Config:
         if not isinstance(self._config_values.encoding, str):
             raise IncorrectEncodingError()
     
-        if not isinstance(self._config_values.timeout, int) or isinstance(self._config_values.timeout, bool) or self._config_values.timeout < 0 or self._config_values.timeout > 60:
-            raise IncorrectEncodingError()
+        if not isinstance(self._config_values.timeout, int) or isinstance(self._config_values.timeout, bool):
+            raise IncorrectTimeoutError()
+    
+        if self._config_values.timeout < 0 or self._config_values.timeout > 60:
+            raise IncorrectTimeoutError()
     
         if not isinstance(self._config_values.headless_mode, bool) or not isinstance(self._config_values.should_verify_certificate, bool):
             raise IncorrectVerifyError()
@@ -207,15 +210,15 @@ class Crawler:
         self._config = config
         self.find_articles()
 
-    def _extract_url(self, article_bs: Tag):
+    def _extract_url(self, article_bs: Tag) -> str:
         """
-        Find and retrieve urls from HTML.
+        Find and retrieve url from HTML.
 
         Args:
             article_bs (bs4.Tag): Tag instance
 
         Returns:
-            list[str]: Urls from HTML
+            str: url from HTML
         """
 
         return "https://theatre-library.ru" + article_bs.find("a")["href"]
@@ -354,6 +357,6 @@ def main() -> None:
     configuration = Config(path_to_config=CRAWLER_CONFIG_PATH)
     prepare_environment(ASSETS_PATH)
     crawler = Crawler(config=configuration)
-
+    
 if __name__ == "__main__":
     main()
