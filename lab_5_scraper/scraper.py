@@ -10,6 +10,9 @@ import re
 
 import requests
 from bs4 import BeautifulSoup, Tag
+from io import BytesIO
+from core_utils.article.io import to_raw, to_meta
+from docx import Document
 
 from core_utils.article.article import Article
 from core_utils.config_dto import ConfigDTO
@@ -185,8 +188,9 @@ def make_request(url: str, config: Config) -> requests.models.Response:
         requests.models.Response: A response from a request
     """
 
-    return requests.get(url, headers=config.get_headers(), timeout=config.get_timeout())
-
+    response = requests.get(url, headers=config.get_headers(), timeout=config.get_timeout(), verify=config.get_verify_certificate(), allow_redirects=True)
+    response.encoding = config.get_encoding()
+    return response
 
 class Crawler:
     """
@@ -195,6 +199,7 @@ class Crawler:
 
     _config : Config
     urls = []
+    search_urls = []
 
     #: Url pattern
     url_pattern: re.Pattern | str
@@ -230,19 +235,23 @@ class Crawler:
         """
 
         for article_url in self.get_search_urls():
-            response = make_request(article_url, self._config)
+            try:
+                response = make_request(article_url, self._config)
 
-            if not response.ok:
+                if not response.ok:
+                    continue
+
+                soup = BeautifulSoup(response.text, features="lxml")
+
+                for article_bs in soup.find_all(class_="th_d1"):
+                    self.urls.append(self._extract_url(article_bs))
+                    self.search_urls.append(article_url)
+
+                    if len(self.urls) == self._config.get_num_articles():
+                        break
+            except requests.RequestException:
                 continue
-            
-            
-
-            soup = BeautifulSoup(response.text, features="lxml")
-
-            for article_bs in soup.find_all(class_="th_d1"):
-                self.urls.append(self._extract_url(article_bs))
-
-
+        
     def get_search_urls(self) -> list:
         """
         Get seed_urls param.
@@ -286,6 +295,9 @@ class HTMLParser:
     HTMLParser implementation.
     """
 
+    _config : Config
+    _article : Article
+
     def __init__(self, full_url: str, article_id: int, config: Config) -> None:
         """
         Initialize an instance of the HTMLParser class.
@@ -296,6 +308,11 @@ class HTMLParser:
             config (Config): Configuration
         """
 
+        self._config = config
+        self._article = Article(full_url, article_id)
+
+
+
     def _fill_article_with_text(self, article_soup: BeautifulSoup) -> None:
         """
         Find text of article.
@@ -304,6 +321,29 @@ class HTMLParser:
             article_soup (bs4.BeautifulSoup): BeautifulSoup instance
         """
 
+        document_bs = article_soup.find("a")["href"]
+        document_url = "https://theatre-library.ru" + document_bs
+        
+        try:
+            response = make_request(document_url, self._config)
+        except requests.RequestException:
+            return
+
+        if not response.ok:
+            return
+
+        doc = Document(BytesIO(response.content))
+
+        parser = WordParser(doc, self._article)
+
+        article_text = parser.parse()
+
+        if article_text == False:
+            return
+
+        self._article.text = article_text
+
+
     def _fill_article_with_meta_information(self, article_soup: BeautifulSoup) -> None:
         """
         Find meta information of article.
@@ -311,6 +351,15 @@ class HTMLParser:
         Args:
             article_soup (bs4.BeautifulSoup): BeautifulSoup instance
         """
+
+        primary_meta = article_soup.find_all(class_="uline")
+
+        self._article.title = primary_meta[0].text.strip("«»")
+
+        if len(primary_meta) > 1:
+            self._article.author = [author.text for author in primary_meta[1:]]
+        else:
+            self._article.author = "NOT FOUND"
 
     def unify_date_format(self, date_str: str) -> datetime.datetime:
         """
@@ -330,7 +379,26 @@ class HTMLParser:
         Returns:
             Article | bool: Article instance, False in case of request error
         """
+        try:
+            response = make_request(self._article.url, self._config)
+        except requests.RequestException:
+            return False
 
+        if not response.ok:
+            return False
+
+        article_bs = BeautifulSoup(response.text, features="lxml")
+
+        article_bs = article_bs.find_all(class_="th_d1")[self._article.article_id]
+
+        self._fill_article_with_meta_information(article_bs)
+
+        self._fill_article_with_text(article_bs)
+
+        if self._article.text == None:
+            return False
+
+        return self._article
 
 def prepare_environment(base_path: pathlib.Path | str) -> None:
     """
@@ -343,20 +411,68 @@ def prepare_environment(base_path: pathlib.Path | str) -> None:
     if base_path.exists():
         for stored_file in base_path.iterdir():
             stored_file.unlink()
-
         base_path.rmdir()
     
     base_path.mkdir(parents=True)
+
+class WordParser:
+
+    _doc : Document
+    _article : Article
+
+    def __init__(self, doc : Document, article : Article) -> None:
+        """
+        Initialize an instance of the HTMLParser class.
+
+        Args:
+            doc (Document): Document
+            article : Article
+        """
+
+        self._doc = doc
+        self._article = article
+
+    def parse(self) -> str | bool:
+
+        text = ""
+        is_main_content = False
+
+        for paragraph in self._doc.paragraphs:
+            text += paragraph.text
+            
+            if is_main_content:
+                text += "\n"
+            
+            if self._article.title in text:
+                text = ""
+                is_main_content = True
+
+        if not is_main_content:
+            return ""
+        
+        return text
 
 
 def main() -> None:
     """
     Entrypoint for scraper module.
     """
-
+    
     configuration = Config(path_to_config=CRAWLER_CONFIG_PATH)
     prepare_environment(ASSETS_PATH)
     crawler = Crawler(config=configuration)
-    
+
+    for i, full_url in enumerate(crawler.search_urls):
+        html_parser = HTMLParser(full_url=full_url, article_id=i, config=configuration)
+        article = html_parser.parse()
+
+        if article == False:
+            print(f"Failed to parse article {i}")
+            continue
+        
+        to_raw(article)
+        to_meta(article)
+        
+
 if __name__ == "__main__":
     main()
