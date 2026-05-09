@@ -243,7 +243,7 @@ class Crawler:
             str: url from HTML
         """
 
-        return article_bs.find(name="home_url") + "?page=" + str(article_bs.find(class_="pager-current"))
+        return "https://theatre-library.ru/" + "?page=" + str(article_bs.find(class_="pager-current"))
         
 
     def find_articles(self) -> None:
@@ -290,10 +290,10 @@ class Crawler:
 
         article_count = 0
 
-        for seed_id, url in enumerate(self._page_counts):
-            if article_count + url[1] >= article_number:
+        for seed_id, pcount in enumerate(self._page_counts):
+            if article_count + pcount >= article_number:
                 return (self.urls[article_number], seed_id * 100 + article_number - article_count)
-            article_count += url[1]
+            article_count += pcount
 
 
 # 10
