@@ -243,7 +243,7 @@ class Crawler:
             str: url from HTML
         """
 
-        return "https://theatre-library.ru/" + "?page=" + str(article_bs.find(class_="pager-current")) + "article=" + str(len(self.urls))
+        return "https://theatre-library.ru/" + "?page=" + str(article_bs.find(class_="pager-current")) + "article=" + str(self.get_article_data(len(self.urls)))
         
 
     def find_articles(self) -> None:
@@ -285,16 +285,17 @@ class Crawler:
 
         return self._config.get_seed_urls()
 
-    def get_article_data(self, article_number : int) -> tuple[str, int]:
-        article_relative_index = 0
+    def get_article_data(self, article_number : int) -> int:
 
         article_count = 0
 
         for seed_id, pcount in enumerate(self._page_counts):
             if article_count + pcount >= article_number:
                 print(article_number, article_count)
-                return (self.urls[article_number], seed_id * 100 + article_number - article_count)
+                break
             article_count += pcount
+        
+        return article_number - article_count
 
 
 # 10
@@ -425,13 +426,15 @@ class HTMLParser:
 
         article_bs = BeautifulSoup(response.text, features="lxml")
 
-        article_bs = article_bs.find_all(class_="th_d1")[self.article.article_id % 100]
+        relative_article_id = int(self.article.url[self.article.url.rfind("=")+1:])
+
+        article_bs = article_bs.find_all(class_="th_d1")[relative_article_id]
 
         self._fill_article_with_meta_information(article_bs)
 
         self._fill_article_with_text(article_bs)
 
-        if self.article.text == None:
+        if self.article.text == "":
             return False
 
         return self.article
@@ -471,7 +474,7 @@ class WordParser:
     def parse(self) -> str | bool:
 
         text = ""
-        is_main_content = False
+        is_main_content = True
 
         for paragraph in self._doc.paragraphs:
             text += paragraph.text
@@ -479,7 +482,7 @@ class WordParser:
             if is_main_content:
                 text += "\n"
             
-            if self.article.title in text:
+            if not is_main_content and self.article.title in text:
                 text = ""
                 is_main_content = True
 
@@ -498,15 +501,16 @@ def main() -> None:
     prepare_environment(ASSETS_PATH)
     crawler = Crawler(config=configuration)
 
-    for article_number in range(len(crawler.urls)):
+    skipped_articles = 0
 
-        full_url, article_id = crawler.get_article_data(article_number)
+    for article_id, full_url in enumerate(crawler.urls):
 
-        html_parser = HTMLParser(full_url=full_url, article_id=article_id, config=configuration)
+        html_parser = HTMLParser(full_url=full_url, article_id=article_id+1-skipped_articles, config=configuration)
         article = html_parser.parse()
 
         if article == False:
-            print(f"Failed to parse article {article_number} ({article_id})")
+            print(f"Failed to parse article {article_id+1-skipped_articles} ({article_id+1})")
+            skipped_articles += 1
             continue
         
         to_raw(article)
