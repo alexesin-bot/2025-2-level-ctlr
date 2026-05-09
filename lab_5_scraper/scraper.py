@@ -216,7 +216,7 @@ class Crawler:
 
     _config : Config
     urls = []
-    _search_urls = []
+    _page_counts = []
 
     #: Url pattern
     url_pattern: re.Pattern | str
@@ -243,7 +243,7 @@ class Crawler:
             str: url from HTML
         """
 
-        return "https://theatre-library.ru" + article_bs.find("a")["href"]
+        return article_bs.find(name="home_url") + "?page=" + str(article_bs.find(class_="pager-current"))
         
 
     def find_articles(self) -> None:
@@ -270,7 +270,7 @@ class Crawler:
                     if len(self.urls) == self._config.get_num_articles():
                         break
                 
-                self._search_urls.append((article_url, article_count))
+                self._page_counts.append(article_count)
             except requests.RequestException:
                 print(f"Failed to load page {article_url}")
                 continue
@@ -290,9 +290,9 @@ class Crawler:
 
         article_count = 0
 
-        for seed_id, url in enumerate(self._search_urls):
+        for seed_id, url in enumerate(self._page_counts):
             if article_count + url[1] >= article_number:
-                return (url[0], (seed_id + 1) * 100 + article_number - article_count)
+                return (self.urls[article_number], seed_id * 100 + article_number - article_count)
             article_count += url[1]
 
 
