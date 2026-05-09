@@ -370,14 +370,14 @@ class HTMLParser:
 
         doc = Document(BytesIO(response.content))
 
-        parser = WordParser(doc, self._article)
+        parser = WordParser(doc, self.article)
 
         article_text = parser.parse()
 
         if article_text == False:
             return
 
-        self._article.text = article_text
+        self.article.text = article_text
 
 
     def _fill_article_with_meta_information(self, article_soup: BeautifulSoup) -> None:
@@ -454,7 +454,7 @@ def prepare_environment(base_path: pathlib.Path | str) -> None:
 class WordParser:
 
     _doc : Document
-    _article : Article
+    article : Article
 
     def __init__(self, doc : Document, article : Article) -> None:
         """
@@ -466,7 +466,7 @@ class WordParser:
         """
 
         self._doc = doc
-        self._article = article
+        self.article = article
 
     def parse(self) -> str | bool:
 
@@ -479,7 +479,7 @@ class WordParser:
             if is_main_content:
                 text += "\n"
             
-            if self._article.title in text:
+            if self.article.title in text:
                 text = ""
                 is_main_content = True
 
