@@ -77,7 +77,8 @@ class Config:
         """
         Ensure configuration parameters are not corrupt.
         """
-        
+        if not isinstance(self._config_values.seed_urls, list):
+            raise IncorrectSeedURLError()
 
         for url in self._config_values.seed_urls:
             if not re.match("https?://(www.)?", url):
@@ -199,7 +200,7 @@ class Crawler:
 
     _config : Config
     urls = []
-    search_urls = []
+    _search_urls = []
 
     #: Url pattern
     url_pattern: re.Pattern | str
@@ -234,7 +235,7 @@ class Crawler:
         Find articles.
         """
 
-        for article_url in self.get_search_urls():
+        for search_url_index, article_url in enumerate(self.get_search_urls()):
             try:
                 response = make_request(article_url, self._config)
 
@@ -243,13 +244,19 @@ class Crawler:
 
                 soup = BeautifulSoup(response.text, features="lxml")
 
+                article_count = 0
+
                 for article_bs in soup.find_all(class_="th_d1"):
                     self.urls.append(self._extract_url(article_bs))
-                    self.search_urls.append(article_url)
+
+                    article_count += 1
 
                     if len(self.urls) == self._config.get_num_articles():
                         break
+                
+                self._search_urls.append((article_url, article_count))
             except requests.RequestException:
+                print(f"Failed to load page {article_url}")
                 continue
         
     def get_search_urls(self) -> list:
@@ -261,6 +268,17 @@ class Crawler:
         """
 
         return self._config.get_seed_urls()
+
+    def get_article_data(self, article_number : int) -> tuple[str, int]:
+        article_relative_index = 0
+
+        article_count = 0
+
+        for seed_id, url in enumerate(self._search_urls):
+            if article_count + url[1] >= article_number:
+                print(article_number, article_count)
+                return (url[0], (seed_id + 1) * 100 + article_number - article_count)
+            article_count += url[1]
 
 
 # 10
@@ -327,9 +345,11 @@ class HTMLParser:
         try:
             response = make_request(document_url, self._config)
         except requests.RequestException:
+            print(f"Failed to download document from {document_url}")
             return
 
         if not response.ok:
+            print(f"Failed to download document from {document_url}")
             return
 
         doc = Document(BytesIO(response.content))
@@ -389,7 +409,7 @@ class HTMLParser:
 
         article_bs = BeautifulSoup(response.text, features="lxml")
 
-        article_bs = article_bs.find_all(class_="th_d1")[self._article.article_id]
+        article_bs = article_bs.find_all(class_="th_d1")[self._article.article_id % 100]
 
         self._fill_article_with_meta_information(article_bs)
 
@@ -462,12 +482,15 @@ def main() -> None:
     prepare_environment(ASSETS_PATH)
     crawler = Crawler(config=configuration)
 
-    for i, full_url in enumerate(crawler.search_urls):
-        html_parser = HTMLParser(full_url=full_url, article_id=i, config=configuration)
+    for article_number in range(len(crawler.urls)):
+
+        full_url, article_id = crawler.get_article_data(article_number)
+
+        html_parser = HTMLParser(full_url=full_url, article_id=article_id, config=configuration)
         article = html_parser.parse()
 
         if article == False:
-            print(f"Failed to parse article {i}")
+            print(f"Failed to parse article {article_number} ({article_id})")
             continue
         
         to_raw(article)
