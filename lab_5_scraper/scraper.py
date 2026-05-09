@@ -43,9 +43,6 @@ class Config:
     """
     Class for unpacking and validating configurations.
     """
-    
-    _path_to_config : pathlib.Path
-    _config_values : ConfigDTO
 
     def __init__(self, path_to_config: pathlib.Path) -> None:
         """
@@ -55,9 +52,15 @@ class Config:
             path_to_config (pathlib.Path): Path to configuration.
         """
         
-        self._path_to_config = path_to_config
-        self._config_values = self._extract_config_content()
-
+        self.path_to_config : pathlib.Path = path_to_config
+        self._seed_urls: list[str] = []
+        self._num_articles: int = 0
+        self._headers: dict[str, str] = {}
+        self._encoding: str = ""
+        self._timeout: int = 0
+        self._should_verify_certificate: bool = False
+        self._headless_mode: bool = False
+        
         self._validate_config_content()
 
     def _extract_config_content(self) -> ConfigDTO:
@@ -68,7 +71,7 @@ class Config:
             ConfigDTO: Config values
         """
 
-        with open(self._path_to_config, encoding="utf-8") as config_file:
+        with open(self.path_to_config, encoding="utf-8") as config_file:
             config_data = json.load(config_file)
             return ConfigDTO(**config_data)
 
@@ -77,33 +80,46 @@ class Config:
         """
         Ensure configuration parameters are not corrupt.
         """
-        if not isinstance(self._config_values.seed_urls, list):
+                
+        config_values = self._extract_config_content()
+
+
+        if not isinstance(config_values.seed_urls, list):
             raise IncorrectSeedURLError()
 
-        for url in self._config_values.seed_urls:
+        for url in config_values.seed_urls:
             if not re.match("https?://(www.)?", url):
                 raise IncorrectSeedURLError()
 
-        if not isinstance(self._config_values.total_articles, int) or isinstance(self._config_values.total_articles, bool) or self._config_values.total_articles < 0:
+        if not isinstance(config_values.total_articles, int) or isinstance(config_values.total_articles, bool) or config_values.total_articles < 0:
             raise IncorrectNumberOfArticlesError()
 
-        if not (1 <= self._config_values.total_articles < 150):
+        if not (1 <= config_values.total_articles < 150):
             raise NumberOfArticlesOutOfRangeError()
     
-        if not isinstance(self._config_values.headers, dict):
+        if not isinstance(config_values.headers, dict):
             raise IncorrectHeadersError()
 
-        if not isinstance(self._config_values.encoding, str):
+        if not isinstance(config_values.encoding, str):
             raise IncorrectEncodingError()
     
-        if not isinstance(self._config_values.timeout, int) or isinstance(self._config_values.timeout, bool):
+        if not isinstance(config_values.timeout, int) or isinstance(config_values.timeout, bool):
             raise IncorrectTimeoutError()
     
-        if self._config_values.timeout < 0 or self._config_values.timeout > 60:
+        if config_values.timeout < 0 or config_values.timeout > 60:
             raise IncorrectTimeoutError()
     
-        if not isinstance(self._config_values.headless_mode, bool) or not isinstance(self._config_values.should_verify_certificate, bool):
+        if not isinstance(config_values.headless_mode, bool) or not isinstance(config_values.should_verify_certificate, bool):
             raise IncorrectVerifyError()
+
+        self._seed_urls = config_values.seed_urls
+        self._num_articles = config_values.total_articles
+        self._headers: dict[str, str] = config_values.headers
+        self._encoding: str = config_values.encoding
+        self._timeout: int = config_values.timeout
+        self._should_verify_certificate: bool = config_values.should_verify_certificate
+        self._headless_mode: bool = config_values.headless_mode
+        
 
 
     def get_seed_urls(self) -> list[str]:
@@ -114,7 +130,7 @@ class Config:
             list[str]: Seed urls
         """
 
-        return self._config_values.seed_urls
+        return self._seed_urls
 
     def get_num_articles(self) -> int:
         """
@@ -124,7 +140,7 @@ class Config:
             int: Total number of articles to scrape
         """
 
-        return self._config_values.total_articles
+        return self._num_articles
 
     def get_headers(self) -> dict[str, str]:
         """
@@ -134,7 +150,7 @@ class Config:
             dict[str, str]: Headers
         """
 
-        return self._config_values.headers
+        return self._headers
 
     def get_encoding(self) -> str:
         """
@@ -144,7 +160,7 @@ class Config:
             str: Encoding
         """
 
-        return self._config_values.encoding
+        return self._encoding
 
     def get_timeout(self) -> int:
         """
@@ -154,7 +170,7 @@ class Config:
             int: Number of seconds to wait for response
         """
         
-        return self._config_values.timeout
+        return self._timeout
 
     def get_verify_certificate(self) -> bool:
         """
@@ -164,7 +180,7 @@ class Config:
             bool: Whether to verify certificate or not
         """
 
-        return self._config_values.should_verify_certificate
+        return self._should_verify_certificate
 
     def get_headless_mode(self) -> bool:
         """
@@ -174,7 +190,7 @@ class Config:
             bool: Whether to use headless mode or not
         """
 
-        return self._config_values.headless_mode
+        return self._headless_mode
 
 
 def make_request(url: str, config: Config) -> requests.models.Response:
@@ -276,7 +292,6 @@ class Crawler:
 
         for seed_id, url in enumerate(self._search_urls):
             if article_count + url[1] >= article_number:
-                print(article_number, article_count)
                 return (url[0], (seed_id + 1) * 100 + article_number - article_count)
             article_count += url[1]
 
