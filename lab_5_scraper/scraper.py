@@ -263,12 +263,12 @@ class Crawler:
                 article_count = 0
 
                 for article_bs in soup.find_all(class_="th_d1"):
+                    if len(self.urls) == self._config.get_num_articles():
+                        break
+                    
                     self.urls.append(self._extract_url(article_bs))
 
                     article_count += 1
-
-                    if len(self.urls) == self._config.get_num_articles():
-                        break
                 
                 self._page_counts.append(article_count)
             except requests.RequestException:
