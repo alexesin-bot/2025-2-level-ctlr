@@ -1,0 +1,7 @@
+beautifulsoup4==4.14.3
+matplotlib==3.10.9
+Pillow==12.2.0
+pytest==9.0.3
+python_docx==1.2.0
+quality_control==0.0.1b0
+Requests==2.33.1
