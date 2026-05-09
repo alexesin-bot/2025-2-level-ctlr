@@ -243,7 +243,7 @@ class Crawler:
             str: url from HTML
         """
 
-        return "https://theatre-library.ru/" + "?page=" + str(article_bs.find(class_="pager-current"))
+        return "https://theatre-library.ru/" + "?page=" + str(article_bs.find(class_="pager-current")) + "article=" + str(len(self.urls))
         
 
     def find_articles(self) -> None:
@@ -292,6 +292,7 @@ class Crawler:
 
         for seed_id, pcount in enumerate(self._page_counts):
             if article_count + pcount >= article_number:
+                print(article_number, article_count)
                 return (self.urls[article_number], seed_id * 100 + article_number - article_count)
             article_count += pcount
 
@@ -329,7 +330,7 @@ class HTMLParser:
     """
 
     _config : Config
-    _article : Article
+    article : Article
 
     def __init__(self, full_url: str, article_id: int, config: Config) -> None:
         """
@@ -342,7 +343,7 @@ class HTMLParser:
         """
 
         self._config = config
-        self._article = Article(full_url, article_id)
+        self.article = Article(full_url, article_id)
 
 
 
@@ -389,12 +390,12 @@ class HTMLParser:
 
         primary_meta = article_soup.find_all(class_="uline")
 
-        self._article.title = primary_meta[0].text.strip("«»")
+        self.article.title = primary_meta[0].text.strip("«»")
 
         if len(primary_meta) > 1:
-            self._article.author = [author.text for author in primary_meta[1:]]
+            self.article.author = [author.text for author in primary_meta[1:]]
         else:
-            self._article.author = "NOT FOUND"
+            self.article.author = "NOT FOUND"
 
     def unify_date_format(self, date_str: str) -> datetime.datetime:
         """
@@ -415,7 +416,7 @@ class HTMLParser:
             Article | bool: Article instance, False in case of request error
         """
         try:
-            response = make_request(self._article.url, self._config)
+            response = make_request(self.article.url, self._config)
         except requests.RequestException:
             return False
 
@@ -424,16 +425,16 @@ class HTMLParser:
 
         article_bs = BeautifulSoup(response.text, features="lxml")
 
-        article_bs = article_bs.find_all(class_="th_d1")[self._article.article_id % 100]
+        article_bs = article_bs.find_all(class_="th_d1")[self.article.article_id % 100]
 
         self._fill_article_with_meta_information(article_bs)
 
         self._fill_article_with_text(article_bs)
 
-        if self._article.text == None:
+        if self.article.text == None:
             return False
 
-        return self._article
+        return self.article
 
 def prepare_environment(base_path: pathlib.Path | str) -> None:
     """
