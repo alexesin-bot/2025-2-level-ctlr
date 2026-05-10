@@ -208,7 +208,8 @@ def make_request(url: str, config: Config) -> requests.models.Response:
         requests.models.Response: A response from a request
     """
 
-    response = requests.get(url, headers=config.get_headers(), timeout=config.get_timeout(), verify=config.get_verify_certificate(), allow_redirects=True)
+    response = requests.get(url, headers=config.get_headers(), timeout=config.get_timeout(), 
+                            verify=config.get_verify_certificate(), allow_redirects=True)
     response.encoding = config.get_encoding()
     return response
 
@@ -243,7 +244,7 @@ class Crawler:
         """
 
         relative_article_id = self._get_relative_article_id(len(self.urls))
-        page_number = str(article_bs.find(class_="pager-current"))
+        page_number = article_bs.find(class_="pager-current")
 
         return "https://theatre-library.ru/" + "?page=" + str(page_number) + "article=" + str(relative_article_id)
         
@@ -430,7 +431,7 @@ class HTMLParser:
         Returns:
             Article | bool: Article instance, False in case of request error
         """
-        
+
         try:
             response = make_request(self.article.url, self.config)
         except requests.RequestException:
