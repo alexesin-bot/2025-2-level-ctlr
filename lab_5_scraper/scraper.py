@@ -7,13 +7,13 @@ import datetime
 import json
 import pathlib
 import re
+from io import BytesIO
 
 import requests
 from bs4 import BeautifulSoup, Tag
-from io import BytesIO
-from core_utils.article.io import to_raw, to_meta
 from docx import Document
 
+from core_utils.article.io import to_raw, to_meta
 from core_utils.article.article import Article
 from core_utils.config_dto import ConfigDTO
 from core_utils.constants import CRAWLER_CONFIG_PATH, ASSETS_PATH
@@ -91,7 +91,10 @@ class Config:
             if not re.match("https?://(www.)?", url):
                 raise IncorrectSeedURLError()
 
-        if not isinstance(config_values.total_articles, int) or isinstance(config_values.total_articles, bool) or config_values.total_articles < 0:
+        if not isinstance(config_values.total_articles, int) or isinstance(config_values.total_articles, bool):
+            raise IncorrectNumberOfArticlesError()
+        
+        if config_values.total_articles < 0:
             raise IncorrectNumberOfArticlesError()
 
         if not (1 <= config_values.total_articles < 150):
@@ -358,7 +361,7 @@ class HTMLParser:
         self.config = config
         self.full_url = full_url
         self.article_id = article_id
-        self.article = Article()
+        self.article = Article(full_url, article_id)
 
 
 
@@ -428,9 +431,6 @@ class HTMLParser:
             Article | bool: Article instance, False in case of request error
         """
         
-        self.article.url = self.full_url
-        self.article.article_id = self.article_id
-
         try:
             response = make_request(self.article.url, self.config)
         except requests.RequestException:
