@@ -218,9 +218,6 @@ class Crawler:
     urls = []
     _page_counts = []
 
-    #: Url pattern
-    url_pattern: re.Pattern | str
-
     def __init__(self, config: Config) -> None:
         """
         Initialize an instance of the Crawler class.
@@ -230,7 +227,6 @@ class Crawler:
         """
 
         self._config = config
-        self.find_articles()
 
     def _extract_url(self, article_bs: Tag) -> str:
         """
@@ -243,7 +239,10 @@ class Crawler:
             str: url from HTML
         """
 
-        return "https://theatre-library.ru/" + "?page=" + str(article_bs.find(class_="pager-current")) + "article=" + str(self.get_article_data(len(self.urls)))
+        relative_article_id = self._get_relative_article_id(len(self.urls))
+        page_number = str(article_bs.find(class_="pager-current"))
+
+        return "https://theatre-library.ru/" + "?page=" + str(page_number) + "article=" + str(relative_article_id)
         
 
     def find_articles(self) -> None:
@@ -252,8 +251,12 @@ class Crawler:
         """
 
         for search_url_index, article_url in enumerate(self.get_search_urls()):
-            try:
-                response = make_request(article_url, self._config)
+                
+                try:
+                    response = make_request(article_url, self._config)
+                except requests.RequestException:
+                    print(f"Failed to load page {article_url}")
+                    continue
 
                 if not response.ok:
                     continue
@@ -271,9 +274,6 @@ class Crawler:
                     article_count += 1
                 
                 self._page_counts.append(article_count)
-            except requests.RequestException:
-                print(f"Failed to load page {article_url}")
-                continue
         
     def get_search_urls(self) -> list:
         """
@@ -285,17 +285,28 @@ class Crawler:
 
         return self._config.get_seed_urls()
 
-    def get_article_data(self, article_number : int) -> int:
+    def _get_relative_article_id(self, article_id : int) -> int:
+
+        """
+        Get number of the article relative to its page
+
+        Args:
+            article_id (int): id of the article
+
+        Returns:
+            str: url from HTML
+        """
+
 
         article_count = 0
 
         for seed_id, pcount in enumerate(self._page_counts):
-            if article_count + pcount >= article_number:
-                print(article_number, article_count)
+            if article_count + pcount >= article_id:
+                print(article_id, article_count)
                 break
             article_count += pcount
         
-        return article_number - article_count
+        return article_id - article_count
 
 
 # 10
@@ -330,8 +341,9 @@ class HTMLParser:
     HTMLParser implementation.
     """
 
-    _config : Config
-    article : Article
+    config : Config
+    article_id : int
+    full_url : str
 
     def __init__(self, full_url: str, article_id: int, config: Config) -> None:
         """
@@ -343,8 +355,10 @@ class HTMLParser:
             config (Config): Configuration
         """
 
-        self._config = config
-        self.article = Article(full_url, article_id)
+        self.config = config
+        self.full_url = full_url
+        self.article_id = article_id
+        self.article = Article()
 
 
 
@@ -360,7 +374,7 @@ class HTMLParser:
         document_url = "https://theatre-library.ru" + document_bs
         
         try:
-            response = make_request(document_url, self._config)
+            response = make_request(document_url, self.config)
         except requests.RequestException:
             print(f"Failed to download document from {document_url}")
             return
@@ -374,9 +388,6 @@ class HTMLParser:
         parser = WordParser(doc, self.article)
 
         article_text = parser.parse()
-
-        if article_text == False:
-            return
 
         self.article.text = article_text
 
@@ -416,8 +427,12 @@ class HTMLParser:
         Returns:
             Article | bool: Article instance, False in case of request error
         """
+        
+        self.article.url = self.full_url
+        self.article.article_id = self.article_id
+
         try:
-            response = make_request(self.article.url, self._config)
+            response = make_request(self.article.url, self.config)
         except requests.RequestException:
             return False
 
@@ -456,12 +471,16 @@ def prepare_environment(base_path: pathlib.Path | str) -> None:
 
 class WordParser:
 
+    """
+    Parses text from a docx file
+    """
+
     _doc : Document
     article : Article
 
     def __init__(self, doc : Document, article : Article) -> None:
         """
-        Initialize an instance of the HTMLParser class.
+        Initialize an instance of the WordParser class.
 
         Args:
             doc (Document): Document
@@ -471,24 +490,14 @@ class WordParser:
         self._doc = doc
         self.article = article
 
-    def parse(self) -> str | bool:
+    def parse(self) -> str:
 
         text = ""
-        is_main_content = True
 
         for paragraph in self._doc.paragraphs:
             text += paragraph.text
-            
-            if is_main_content:
-                text += "\n"
-            
-            if not is_main_content and self.article.title in text:
-                text = ""
-                is_main_content = True
+            text += "\n"
 
-        if not is_main_content:
-            return ""
-        
         return text
 
 
@@ -500,6 +509,7 @@ def main() -> None:
     configuration = Config(path_to_config=CRAWLER_CONFIG_PATH)
     prepare_environment(ASSETS_PATH)
     crawler = Crawler(config=configuration)
+    crawler.find_articles()
 
     skipped_articles = 0
 
