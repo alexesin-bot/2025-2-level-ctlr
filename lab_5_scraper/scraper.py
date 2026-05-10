@@ -244,7 +244,7 @@ class Crawler:
         """
 
         relative_article_id = self._get_relative_article_id(len(self.urls))
-        page_number = article_bs.find(class_="pager-current")
+        page_number = article_bs.find(class_="pager-current").text
 
         return "https://theatre-library.ru/" + "?page=" + str(page_number) + "article=" + str(relative_article_id)
         
