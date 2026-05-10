@@ -13,8 +13,8 @@ import requests
 from bs4 import BeautifulSoup, Tag
 from docx import Document
 
-from core_utils.article.io import to_raw, to_meta
 from core_utils.article.article import Article
+from core_utils.article.io import to_raw, to_meta
 from core_utils.config_dto import ConfigDTO
 from core_utils.constants import CRAWLER_CONFIG_PATH, ASSETS_PATH
 
@@ -218,10 +218,6 @@ class Crawler:
     Crawler implementation.
     """
 
-    _config : Config
-    urls = []
-    _page_counts = []
-
     def __init__(self, config: Config) -> None:
         """
         Initialize an instance of the Crawler class.
@@ -230,7 +226,9 @@ class Crawler:
             config (Config): Configuration
         """
 
-        self._config = config
+        self._config : Config = config
+        self.urls : list[str] = []
+        self._page_counts : list[int] = []
 
     def _extract_url(self, article_bs: Tag) -> str:
         """
