@@ -273,7 +273,7 @@ class Crawler:
                     if len(self.urls) == self._config.get_num_articles():
                         break
                     
-                    self.urls.append(self._extract_url(article_bs))
+                    self.urls.append(self._extract_url(soup))
 
                     article_count += 1
                 
