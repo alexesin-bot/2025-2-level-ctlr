@@ -14,9 +14,10 @@ from bs4 import BeautifulSoup, Tag
 from docx import Document
 
 from core_utils.article.article import Article
-from core_utils.article.io import to_raw, to_meta
+from core_utils.article.io import to_meta, to_raw
 from core_utils.config_dto import ConfigDTO
-from core_utils.constants import CRAWLER_CONFIG_PATH, ASSETS_PATH
+from core_utils.constants import ASSETS_PATH, CRAWLER_CONFIG_PATH
+
 
 class IncorrectSeedURLError(Exception):
     """Exception raised when seed URL does not match standard pattern \"https?://(www.)?\""""
